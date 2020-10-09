@@ -63,20 +63,90 @@ static const char* UN_OP_TABLE[NUM_UN_OPS] = {
     "~",  // UnOp::BitNot
 };
 
+static const char* SCALAR_TYPES_STRINGS[NUM_SCALAR_TYPES] = {
+    "void",                // ScalarType::Void
+    "bool",                // ScalarType::Bool
+    "char",                // ScalarType::Char
+    "signed char",         // ScalarType::SignedChar
+    "unsigned char",       // ScalarType::UnsignedChar
+    "short",               // ScalarType::SignedShort
+    "unsigned short",      // ScalarType::UnsignedShort
+    "int",                 // ScalarType::SignedInt
+    "unsigned int",        // ScalarType::UnsignedInt
+    "long",                // ScalarType::SignedLong
+    "unsigned long",       // ScalarType::UnsignedLong
+    "long long",           // ScalarType::SignedLongLong
+    "unsigned long long",  // ScalarType::UnsignedLongLong
+};
+
+std::ostream& operator<<(std::ostream& os, CvQualifiers qualifiers) {
+  const char* to_print;
+  if (qualifiers == (CvQualifiers::Const | CvQualifiers::Volatile)) {
+    to_print = "const volatile";
+  } else if (qualifiers == CvQualifiers::Const) {
+    to_print = "const";
+  } else if (qualifiers == CvQualifiers::Volatile) {
+    to_print = "volatile";
+  } else {
+    return os;
+  }
+
+  return os << to_print;
+}
+
+std::ostream& operator<<(std::ostream& os, ScalarType type) {
+  return os << SCALAR_TYPES_STRINGS[(size_t)type];
+}
+
 TaggedType::TaggedType(std::string name) : name_(std::move(name)) {}
 const std::string& TaggedType::name() const { return name_; }
+std::ostream& operator<<(std::ostream& os, const TaggedType& type) {
+  return os << type.name();
+}
 
 PointerType::PointerType(QualifiedType type) : type_(std::move(type)) {}
 const QualifiedType& PointerType::type() const { return type_; }
+std::ostream& operator<<(std::ostream& os, const PointerType& type) {
+  return os << type.type() << "*";
+}
 
 ReferenceType::ReferenceType(QualifiedType type) : type_(std::move(type)) {}
 const QualifiedType& ReferenceType::type() const { return type_; }
+std::ostream& operator<<(std::ostream& os, const ReferenceType& type) {
+  return os << type.type() << "&";
+}
 
-QualifiedType::QualifiedType(Type type, CvQualifiers cv_qualifiers)
-    : type_(std::make_unique<Type>(std::move(type))),
+QualifiedType::QualifiedType(QualifiableType type, CvQualifiers cv_qualifiers)
+    : type_(std::make_unique<QualifiableType>(std::move(type))),
       cv_qualifiers_(cv_qualifiers) {}
-const Type& QualifiedType::type() const { return *type_; }
+const QualifiableType& QualifiedType::type() const { return *type_; }
 CvQualifiers QualifiedType::cv_qualifiers() const { return cv_qualifiers_; }
+
+std::ostream& operator<<(std::ostream& os, const QualifiedType& type) {
+  const auto& inner_type = type.type();
+  if (std::holds_alternative<PointerType>(inner_type)) {
+    os << inner_type;
+    if (type.cv_qualifiers() != CvQualifiers::None) {
+      os << " " << type.cv_qualifiers();
+    }
+  } else {
+    if (type.cv_qualifiers() != CvQualifiers::None) {
+      os << type.cv_qualifiers() << " ";
+    }
+    os << inner_type;
+  }
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const QualifiableType& type) {
+  std::visit([&os](const auto& type) { os << type; }, type);
+  return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const Type& type) {
+  std::visit([&os](const auto& type) { os << type; }, type);
+  return os;
+}
 
 BinaryExpr::BinaryExpr(Expr lhs, BinOp op, Expr rhs)
     : lhs_(std::make_unique<Expr>(std::move(lhs))),

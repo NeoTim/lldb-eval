@@ -25,54 +25,65 @@
 
 namespace fuzzer {
 
-enum class PrimitiveType : unsigned char;
+enum class ScalarType : unsigned char;
 class TaggedType;
 class PointerType;
 class ReferenceType;
 
-using Type =
-    std::variant<PrimitiveType, TaggedType, PointerType, ReferenceType>;
+using QualifiableType = std::variant<ScalarType, TaggedType, PointerType>;
+std::ostream& operator<<(std::ostream& os, const QualifiableType& type);
 
 // Important: We _must_ specify an underlying type. Otherwise, from C++17
 // onward, casting to an invalid value of an enum type with no underlying type
 // is undefined behavior.
 enum class CvQualifiers : unsigned char {
+  // Not an actual flag, intended to help with checking if a type has any
+  // cv-qualifiers.
+  None = 0,
   Const = 1 << 0,
   Volatile = 1 << 1,
 };
 
-inline CvQualifiers operator|(CvQualifiers lhs, CvQualifiers rhs) {
+constexpr CvQualifiers operator|(CvQualifiers lhs, CvQualifiers rhs) {
   return (CvQualifiers)((unsigned char)lhs | ((unsigned char)rhs));
 }
 
-inline CvQualifiers operator&(CvQualifiers lhs, CvQualifiers rhs) {
+constexpr CvQualifiers operator&(CvQualifiers lhs, CvQualifiers rhs) {
   return (CvQualifiers)((unsigned char)lhs & ((unsigned char)rhs));
 }
 
-inline CvQualifiers& operator&=(CvQualifiers& lhs, CvQualifiers rhs) {
+constexpr CvQualifiers& operator&=(CvQualifiers& lhs, CvQualifiers rhs) {
   lhs = lhs & rhs;
   return lhs;
 }
 
-inline CvQualifiers& operator|=(CvQualifiers& lhs, CvQualifiers rhs) {
+constexpr CvQualifiers& operator|=(CvQualifiers& lhs, CvQualifiers rhs) {
   lhs = lhs | rhs;
   return lhs;
 }
+std::ostream& operator<<(std::ostream& os, CvQualifiers qualifiers);
 
-enum class PrimitiveType : unsigned char {
-  BOOL = 0,
-  CHAR,
-  SIGNED_CHAR,
-  UNSIGNED_CHAR,
-  SIGNED_SHORT,
-  UNSIGNED_SHORT,
-  SIGNED_INT,
-  UNSIGNED_INT,
-  SIGNED_LONG,
-  UNSIGNED_LONG,
-  SIGNED_LONG_LONG,
-  UNSIGNED_LONG_LONG,
+enum class ScalarType : unsigned char {
+  EnumMin,
+  Void = EnumMin,
+  Bool,
+  // Have `char` explicitly because it is implementation dependent whether
+  // `char` maps to `signed char` or `unsigned char`.
+  Char,
+  SignedChar,
+  UnsignedChar,
+  SignedShort,
+  UnsignedShort,
+  SignedInt,
+  UnsignedInt,
+  SignedLong,
+  UnsignedLong,
+  SignedLongLong,
+  UnsignedLongLong,
+  EnumMax = UnsignedLongLong,
 };
+constexpr size_t NUM_SCALAR_TYPES = (size_t)ScalarType::EnumMax + 1;
+std::ostream& operator<<(std::ostream& os, ScalarType type);
 
 class TaggedType {
  public:
@@ -80,22 +91,24 @@ class TaggedType {
 
   const std::string& name() const;
 
+  friend std::ostream& operator<<(std::ostream& os, const TaggedType& type);
+
  private:
   std::string name_;
 };
 
 class QualifiedType {
  public:
-  QualifiedType(Type type, CvQualifiers cv_qualifiers);
+  explicit QualifiedType(QualifiableType type,
+                         CvQualifiers cv_qualifiers = CvQualifiers::None);
 
-  const Type& type() const;
+  const QualifiableType& type() const;
   CvQualifiers cv_qualifiers() const;
 
-  QualifiedType(QualifiedType&&) = default;
-  QualifiedType& operator=(QualifiedType&&) = default;
+  friend std::ostream& operator<<(std::ostream& os, const QualifiedType& type);
 
  private:
-  std::unique_ptr<Type> type_;
+  std::unique_ptr<QualifiableType> type_;
   CvQualifiers cv_qualifiers_;
 };
 
@@ -104,6 +117,8 @@ class PointerType {
   explicit PointerType(QualifiedType type);
 
   const QualifiedType& type() const;
+
+  friend std::ostream& operator<<(std::ostream& os, const PointerType& type);
 
  private:
   QualifiedType type_;
@@ -115,9 +130,14 @@ class ReferenceType {
 
   const QualifiedType& type() const;
 
+  friend std::ostream& operator<<(std::ostream& os, const ReferenceType& type);
+
  private:
   QualifiedType type_;
 };
+
+using Type = std::variant<QualifiedType, ReferenceType>;
+std::ostream& operator<<(std::ostream& os, const Type& type);
 
 class BinaryExpr;
 class UnaryExpr;

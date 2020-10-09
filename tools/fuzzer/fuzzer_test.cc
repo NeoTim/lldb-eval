@@ -296,7 +296,7 @@ TEST_P(OperatorPrecedence, CorrectAst) {
   os << expr;
 
   EXPECT_THAT(expr, MatchesAst(std::cref(*expected.expr)));
-  EXPECT_THAT(os.str(), Eq(expected.str));
+  EXPECT_THAT(os.str(), StrEq(expected.str));
 }
 
 std::vector<TestParam> gen_params() {
@@ -352,3 +352,12 @@ std::vector<TestParam> gen_params() {
 }
 
 INSTANTIATE_TEST_SUITE_P(Fuzzer, OperatorPrecedence, ValuesIn(gen_params()));
+
+TEST(Fuzzer, TypePrinting) {
+  Type type(QualifiedType(PointerType(QualifiedType(
+      PointerType(QualifiedType(ScalarType::Char, CvQualifiers::Const))))));
+
+  std::ostringstream os;
+  os << type;
+  EXPECT_THAT(os.str(), StrEq("const char**"));
+}
