@@ -63,6 +63,21 @@ static const char* UN_OP_TABLE[NUM_UN_OPS] = {
     "~",  // UnOp::BitNot
 };
 
+TaggedType::TaggedType(std::string name) : name_(std::move(name)) {}
+const std::string& TaggedType::name() const { return name_; }
+
+PointerType::PointerType(QualifiedType type) : type_(std::move(type)) {}
+const QualifiedType& PointerType::type() const { return type_; }
+
+ReferenceType::ReferenceType(QualifiedType type) : type_(std::move(type)) {}
+const QualifiedType& ReferenceType::type() const { return type_; }
+
+QualifiedType::QualifiedType(Type type, CvQualifiers cv_qualifiers)
+    : type_(std::make_unique<Type>(std::move(type))),
+      cv_qualifiers_(cv_qualifiers) {}
+const Type& QualifiedType::type() const { return *type_; }
+CvQualifiers QualifiedType::cv_qualifiers() const { return cv_qualifiers_; }
+
 BinaryExpr::BinaryExpr(Expr lhs, BinOp op, Expr rhs)
     : lhs_(std::make_unique<Expr>(std::move(lhs))),
       rhs_(std::make_unique<Expr>(std::move(rhs))),

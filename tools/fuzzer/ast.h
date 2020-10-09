@@ -25,6 +25,100 @@
 
 namespace fuzzer {
 
+enum class PrimitiveType : unsigned char;
+class TaggedType;
+class PointerType;
+class ReferenceType;
+
+using Type =
+    std::variant<PrimitiveType, TaggedType, PointerType, ReferenceType>;
+
+// Important: We _must_ specify an underlying type. Otherwise, from C++17
+// onward, casting to an invalid value of an enum type with no underlying type
+// is undefined behavior.
+enum class CvQualifiers : unsigned char {
+  Const = 1 << 0,
+  Volatile = 1 << 1,
+};
+
+inline CvQualifiers operator|(CvQualifiers lhs, CvQualifiers rhs) {
+  return (CvQualifiers)((unsigned char)lhs | ((unsigned char)rhs));
+}
+
+inline CvQualifiers operator&(CvQualifiers lhs, CvQualifiers rhs) {
+  return (CvQualifiers)((unsigned char)lhs & ((unsigned char)rhs));
+}
+
+inline CvQualifiers& operator&=(CvQualifiers& lhs, CvQualifiers rhs) {
+  lhs = lhs & rhs;
+  return lhs;
+}
+
+inline CvQualifiers& operator|=(CvQualifiers& lhs, CvQualifiers rhs) {
+  lhs = lhs | rhs;
+  return lhs;
+}
+
+enum class PrimitiveType : unsigned char {
+  BOOL = 0,
+  CHAR,
+  SIGNED_CHAR,
+  UNSIGNED_CHAR,
+  SIGNED_SHORT,
+  UNSIGNED_SHORT,
+  SIGNED_INT,
+  UNSIGNED_INT,
+  SIGNED_LONG,
+  UNSIGNED_LONG,
+  SIGNED_LONG_LONG,
+  UNSIGNED_LONG_LONG,
+};
+
+class TaggedType {
+ public:
+  explicit TaggedType(std::string name);
+
+  const std::string& name() const;
+
+ private:
+  std::string name_;
+};
+
+class QualifiedType {
+ public:
+  QualifiedType(Type type, CvQualifiers cv_qualifiers);
+
+  const Type& type() const;
+  CvQualifiers cv_qualifiers() const;
+
+  QualifiedType(QualifiedType&&) = default;
+  QualifiedType& operator=(QualifiedType&&) = default;
+
+ private:
+  std::unique_ptr<Type> type_;
+  CvQualifiers cv_qualifiers_;
+};
+
+class PointerType {
+ public:
+  explicit PointerType(QualifiedType type);
+
+  const QualifiedType& type() const;
+
+ private:
+  QualifiedType type_;
+};
+
+class ReferenceType {
+ public:
+  explicit ReferenceType(QualifiedType type);
+
+  const QualifiedType& type() const;
+
+ private:
+  QualifiedType type_;
+};
+
 class BinaryExpr;
 class UnaryExpr;
 class VariableExpr;
