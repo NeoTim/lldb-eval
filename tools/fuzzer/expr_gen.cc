@@ -17,6 +17,7 @@
 #include "tools/fuzzer/expr_gen.h"
 
 #include <cassert>
+#include <numeric>
 #include <random>
 #include <variant>
 
@@ -41,24 +42,24 @@ int expr_precedence(const Expr& e) {
   return std::visit([](const auto& e) { return e.precedence(); }, e);
 }
 
-IntegerConstant ExprGenerator::gen_integer_constant(const WeightsArray&) {
+IntegerConstant ExprGenerator::gen_integer_constant(const Weights&) {
   auto value = rng_->gen_u64(0, MAX_INT_VALUE);
 
   return IntegerConstant(value);
 }
 
-DoubleConstant ExprGenerator::gen_double_constant(const WeightsArray&) {
+DoubleConstant ExprGenerator::gen_double_constant(const Weights&) {
   std::uniform_real_distribution<double> value_distr(0.0, MAX_DOUBLE_VALUE);
   auto value = rng_->gen_double(0.0, MAX_DOUBLE_VALUE);
 
   return DoubleConstant(value);
 }
 
-VariableExpr ExprGenerator::gen_variable_expr(const WeightsArray&) {
+VariableExpr ExprGenerator::gen_variable_expr(const Weights&) {
   return VariableExpr(VAR);
 }
 
-BinaryExpr ExprGenerator::gen_binary_expr(const WeightsArray& weights) {
+BinaryExpr ExprGenerator::gen_binary_expr(const Weights& weights) {
   auto op = rng_->gen_bin_op();
 
   auto lhs = gen_with_weights(weights);
@@ -97,7 +98,7 @@ BinaryExpr ExprGenerator::gen_binary_expr(const WeightsArray& weights) {
   return BinaryExpr(std::move(lhs), op, std::move(rhs));
 }
 
-UnaryExpr ExprGenerator::gen_unary_expr(const WeightsArray& weights) {
+UnaryExpr ExprGenerator::gen_unary_expr(const Weights& weights) {
   auto expr = gen_with_weights(weights);
   auto op = (UnOp)rng_->gen_un_op();
 
@@ -108,12 +109,11 @@ UnaryExpr ExprGenerator::gen_unary_expr(const WeightsArray& weights) {
   return UnaryExpr(op, std::move(expr));
 }
 
-Expr ExprGenerator::gen_with_weights(const WeightsArray& weights) {
-  WeightsArray new_weights = weights;
+Expr ExprGenerator::gen_with_weights(const Weights& weights) {
+  Weights new_weights = weights;
 
   auto kind = rng_->gen_expr_kind(new_weights);
-  auto idx = (size_t)kind;
-  new_weights[idx] *= EXPR_KIND_INFO[idx].dampening_factor;
+  new_weights[kind] *= EXPR_KIND_INFO[(size_t)kind].dampening_factor;
 
   // Dummy value for initialization
   Expr expr(IntegerConstant(0));
@@ -155,9 +155,10 @@ Expr ExprGenerator::maybe_parenthesized(Expr expr) {
 }
 
 Expr ExprGenerator::generate() {
-  WeightsArray weights;
-  for (size_t i = 0; i < weights.size(); i++) {
-    weights[i] = EXPR_KIND_INFO[i].initial_weight;
+  Weights weights;
+  for (auto it = weights.expr_begin(); it != weights.expr_end(); it++) {
+    auto i = it - weights.expr_begin();
+    *it = EXPR_KIND_INFO[i].initial_weight;
   }
 
   return gen_with_weights(weights);
@@ -185,29 +186,62 @@ double DefaultGeneratorRng::gen_double(double min, double max) {
   return distr(rng_);
 }
 
+CvQualifiers DefaultGeneratorRng::gen_cv_qualifiers(float const_prob,
+                                                    float volatile_prob) {
+  std::bernoulli_distribution const_distr(const_prob);
+  std::bernoulli_distribution volatile_distr(volatile_prob);
+
+  auto retval = CvQualifiers::None;
+  if (const_distr(rng_)) {
+    retval |= CvQualifiers::Const;
+  }
+  if (volatile_distr(rng_)) {
+    retval |= CvQualifiers::Volatile;
+  }
+
+  return retval;
+}
+
 bool DefaultGeneratorRng::gen_parenthesize(float probability) {
   std::bernoulli_distribution distr(probability);
   return distr(rng_);
 }
 
-ExprKind DefaultGeneratorRng::gen_expr_kind(const WeightsArray& weights) {
-  // No need to pull `<numeric>` just for one sum.
-  float sum = 0;
-  for (const auto& e : weights) {
-    sum += e;
-  }
+ExprKind DefaultGeneratorRng::gen_expr_kind(const Weights& weights) {
+  float sum = std::accumulate(weights.expr_begin(), weights.expr_end(), 0);
 
-  std::uniform_real_distribution<double> distr(0, sum);
+  std::uniform_real_distribution<float> distr(0, sum);
   auto val = distr(rng_);
 
   // Dummy initialization to avoid uninitialized warnings, the loop below will
   // always set `kind`.
   ExprKind kind = ExprKind::IntegerConstant;
   float running_sum = 0;
-  for (size_t i = 0; i < weights.size(); i++) {
-    running_sum += weights[i];
+  for (auto it = weights.expr_begin(); it != weights.expr_end(); it++) {
+    running_sum += *it;
     if (val < running_sum) {
-      kind = (ExprKind)i;
+      kind = (ExprKind)(it - weights.expr_begin());
+      break;
+    }
+  }
+
+  return kind;
+}
+
+TypeKind DefaultGeneratorRng::gen_type_kind(const Weights& weights) {
+  float sum = std::accumulate(weights.type_begin(), weights.type_end(), 0);
+
+  std::uniform_real_distribution<float> distr(0, sum);
+  auto val = distr(rng_);
+
+  // Dummy initialization to avoid uninitialized warnings, the loop below will
+  // always set `kind`.
+  TypeKind kind = TypeKind::ScalarType;
+  float running_sum = 0;
+  for (auto it = weights.type_begin(); it != weights.type_end(); it++) {
+    running_sum += *it;
+    if (val < running_sum) {
+      kind = (TypeKind)(it - weights.type_begin());
       break;
     }
   }

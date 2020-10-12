@@ -150,6 +150,7 @@ class MemberOf;
 class MemberOfPtr;
 class ArrayIndex;
 class TernaryExpr;
+class CastExpr;
 
 enum class UnOp : unsigned char {
   // Used to determine the first enum element.
@@ -196,7 +197,7 @@ constexpr size_t NUM_BIN_OPS = (size_t)BinOp::EnumLast + 1;
 using Expr =
     std::variant<IntegerConstant, DoubleConstant, VariableExpr, UnaryExpr,
                  BinaryExpr, AddressOf, MemberOf, MemberOfPtr, ArrayIndex,
-                 TernaryExpr, ParenthesizedExpr>;
+                 TernaryExpr, CastExpr, ParenthesizedExpr>;
 constexpr size_t NUM_EXPR_KINDS = std::variant_size_v<Expr>;
 
 std::ostream& operator<<(std::ostream& os, const Expr& expr);
@@ -380,6 +381,23 @@ class TernaryExpr {
   std::unique_ptr<Expr> cond_;
   std::unique_ptr<Expr> lhs_;
   std::unique_ptr<Expr> rhs_;
+};
+
+class CastExpr {
+ public:
+  static constexpr int PRECEDENCE = 2;
+
+  CastExpr(Type type, Expr expr);
+
+  const Type& type() const;
+  const Expr& expr() const;
+  int precedence() const { return PRECEDENCE; }
+
+  friend std::ostream& operator<<(std::ostream& os, const CastExpr& expr);
+
+ private:
+  Type type_;
+  std::unique_ptr<Expr> expr_;
 };
 
 void dump_expr(const Expr& expr);

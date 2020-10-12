@@ -39,10 +39,18 @@ class FakeGeneratorRng : public GeneratorRng {
     return op;
   }
 
-  ExprKind gen_expr_kind(const WeightsArray&) override {
-    assert(!kinds_.empty());
-    ExprKind kind = kinds_.back();
-    kinds_.pop_back();
+  ExprKind gen_expr_kind(const Weights&) override {
+    assert(!expr_kinds_.empty());
+    ExprKind kind = expr_kinds_.back();
+    expr_kinds_.pop_back();
+
+    return kind;
+  }
+
+  TypeKind gen_type_kind(const Weights&) override {
+    assert(!type_kinds_.empty());
+    TypeKind kind = type_kinds_.back();
+    type_kinds_.pop_back();
 
     return kind;
   }
@@ -63,6 +71,14 @@ class FakeGeneratorRng : public GeneratorRng {
     return constant;
   }
 
+  CvQualifiers gen_cv_qualifiers(float, float) override {
+    assert(!cv_qualifiers_.empty());
+    CvQualifiers cv = cv_qualifiers_.back();
+    cv_qualifiers_.pop_back();
+
+    return cv;
+  }
+
   bool gen_parenthesize(float) override { return false; }
 
   static FakeGeneratorRng from_expr(const Expr& expr) {
@@ -73,66 +89,97 @@ class FakeGeneratorRng : public GeneratorRng {
     std::reverse(rng.bin_ops_.begin(), rng.bin_ops_.end());
     std::reverse(rng.u64_constants_.begin(), rng.u64_constants_.end());
     std::reverse(rng.double_constants_.begin(), rng.double_constants_.end());
-    std::reverse(rng.kinds_.begin(), rng.kinds_.end());
+    std::reverse(rng.expr_kinds_.begin(), rng.expr_kinds_.end());
+    std::reverse(rng.cv_qualifiers_.begin(), rng.cv_qualifiers_.end());
 
     return rng;
   }
 
   void operator()(const UnaryExpr& e) {
-    kinds_.push_back(ExprKind::UnaryExpr);
+    expr_kinds_.push_back(ExprKind::UnaryExpr);
     un_ops_.push_back(e.op());
     std::visit(*this, e.expr());
   }
 
   void operator()(const BinaryExpr& e) {
-    kinds_.push_back(ExprKind::BinaryExpr);
+    expr_kinds_.push_back(ExprKind::BinaryExpr);
     bin_ops_.push_back(e.op());
     std::visit(*this, e.lhs());
     std::visit(*this, e.rhs());
   }
 
   void operator()(const VariableExpr&) {
-    kinds_.push_back(ExprKind::VariableExpr);
+    expr_kinds_.push_back(ExprKind::VariableExpr);
   }
 
   void operator()(const IntegerConstant& e) {
-    kinds_.push_back(ExprKind::IntegerConstant);
+    expr_kinds_.push_back(ExprKind::IntegerConstant);
     u64_constants_.push_back(e.value());
   }
 
   void operator()(const DoubleConstant& e) {
-    kinds_.push_back(ExprKind::DoubleConstant);
+    expr_kinds_.push_back(ExprKind::DoubleConstant);
     double_constants_.push_back(e.value());
   }
 
   void operator()(const ParenthesizedExpr& e) { std::visit(*this, e.expr()); }
 
   void operator()(const AddressOf& e) {
-    kinds_.push_back(ExprKind::AddressOf);
+    expr_kinds_.push_back(ExprKind::AddressOf);
     std::visit(*this, e.expr());
   }
 
   void operator()(const MemberOf& e) {
-    kinds_.push_back(ExprKind::MemberOf);
+    expr_kinds_.push_back(ExprKind::MemberOf);
     std::visit(*this, e.expr());
   }
 
   void operator()(const MemberOfPtr& e) {
-    kinds_.push_back(ExprKind::MemberOfPtr);
+    expr_kinds_.push_back(ExprKind::MemberOfPtr);
     std::visit(*this, e.expr());
   }
 
   void operator()(const ArrayIndex& e) {
-    kinds_.push_back(ExprKind::ArrayIndex);
+    expr_kinds_.push_back(ExprKind::ArrayIndex);
     std::visit(*this, e.expr());
     std::visit(*this, e.idx());
   }
 
   void operator()(const TernaryExpr& e) {
-    kinds_.push_back(ExprKind::TernaryExpr);
+    expr_kinds_.push_back(ExprKind::TernaryExpr);
     std::visit(*this, e.cond());
     std::visit(*this, e.lhs());
     std::visit(*this, e.rhs());
+  }
+
+  void operator()(const CastExpr& e) {
+    std::visit(*this, e.type());
+    std::visit(*this, e.expr());
+  }
+
+  void operator()(const QualifiedType& e) {
+    cv_qualifiers_.push_back(e.cv_qualifiers());
+    std::visit(*this, e.type());
+  }
+
+  void operator()(const PointerType& e) {
+    type_kinds_.push_back(TypeKind::PointerType);
+    (*this)(e.type());
+  }
+
+  void operator()(const ReferenceType& e) {
+    type_kinds_.push_back(TypeKind::ReferenceType);
+    (*this)(e.type());
+  }
+
+  void operator()(const TaggedType& e) {
+    type_kinds_.push_back(TypeKind::TaggedType);
+    tagged_types_.push_back(e.name());
+  }
+
+  void operator()(const ScalarType& e) {
+    type_kinds_.push_back(TypeKind::ScalarType);
+    scalar_types_.push_back(e);
   }
 
  private:
@@ -140,7 +187,11 @@ class FakeGeneratorRng : public GeneratorRng {
   std::vector<BinOp> bin_ops_;
   std::vector<uint64_t> u64_constants_;
   std::vector<double> double_constants_;
-  std::vector<ExprKind> kinds_;
+  std::vector<ExprKind> expr_kinds_;
+  std::vector<TypeKind> type_kinds_;
+  std::vector<CvQualifiers> cv_qualifiers_;
+  std::vector<ScalarType> scalar_types_;
+  std::vector<std::string> tagged_types_;
 };
 
 struct Mismatch {
@@ -224,6 +275,38 @@ class AstComparator {
     std::visit(*this, lhs.cond(), rhs.cond());
     std::visit(*this, lhs.lhs(), rhs.lhs());
     std::visit(*this, lhs.rhs(), rhs.rhs());
+  }
+
+  void operator()(const CastExpr& lhs, const CastExpr& rhs) {
+    std::visit(*this, lhs.type(), rhs.type());
+    std::visit(*this, lhs.expr(), rhs.expr());
+  }
+
+  void operator()(const QualifiedType& lhs, const QualifiedType& rhs) {
+    std::visit(*this, lhs.type(), rhs.type());
+    if (lhs.cv_qualifiers() != rhs.cv_qualifiers()) {
+      add_mismatch(lhs.cv_qualifiers(), rhs.cv_qualifiers());
+    }
+  }
+
+  void operator()(const ReferenceType& lhs, const ReferenceType& rhs) {
+    (*this)(lhs.type(), rhs.type());
+  }
+
+  void operator()(const PointerType& lhs, const PointerType& rhs) {
+    (*this)(lhs.type(), rhs.type());
+  }
+
+  void operator()(const TaggedType& lhs, const TaggedType& rhs) {
+    if (lhs.name() != rhs.name()) {
+      add_mismatch(lhs.name(), rhs.name());
+    }
+  }
+
+  void operator()(ScalarType lhs, ScalarType rhs) {
+    if (lhs != rhs) {
+      add_mismatch(lhs, rhs);
+    }
   }
 
   template <typename T, typename U,

@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <sstream>
 #include <utility>
 #include <variant>
 
@@ -258,6 +259,15 @@ std::ostream& operator<<(std::ostream& os, const TernaryExpr& e) {
   return os << e.cond() << " ? " << e.lhs() << e.rhs();
 }
 
+CastExpr::CastExpr(Type type, Expr expr)
+    : type_(std::move(type)), expr_(std::make_unique<Expr>(std::move(expr))) {}
+
+const Type& CastExpr::type() const { return type_; }
+const Expr& CastExpr::expr() const { return *expr_; }
+std::ostream& operator<<(std::ostream& os, const CastExpr& e) {
+  return os << "(" << e.type() << ") " << e.expr();
+}
+
 std::ostream& operator<<(std::ostream& os, const Expr& e) {
   std::visit([&os](const auto& expr) { os << expr; }, e);
   return os;
@@ -362,6 +372,15 @@ class ExprDumper {
     emit_indentation();
     printf("Right-hand side:\n");
     indented_visit(e.rhs());
+  }
+
+  void operator()(const CastExpr& e) {
+    emit_marked_indentation();
+    std::ostringstream os;
+    os << e.type();
+    printf("Cast expression into type: `%s`\n", os.str().c_str());
+
+    indented_visit(e.expr());
   }
 
  private:
