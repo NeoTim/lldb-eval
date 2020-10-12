@@ -25,9 +25,9 @@
 
 namespace fuzzer {
 
-constexpr float PROB_PARENTHESIZE = 0.5;
-constexpr float PROB_CONST = 0.3;
-constexpr float PROB_VOLATILE = 0.3;
+constexpr float PROB_PARENTHESIZE = 0.5f;
+constexpr float PROB_CONST = 0.3f;
+constexpr float PROB_VOLATILE = 0.3f;
 
 enum class ExprKind : unsigned char {
   IntegerConstant,
