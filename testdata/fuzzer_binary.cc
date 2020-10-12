@@ -16,7 +16,6 @@
 
 // This file _must not_ access the file system, since the current directory
 // is specified in the fuzzer as just `./`.
-void break_here() {}
 
 class MultiInheritBase1 {
  public:
@@ -144,7 +143,7 @@ int main() {
   tu.uint_field = 65;
   (void)tu;
 
-  break_here();
+  // BREAK HERE
 
   return 0;
 }
