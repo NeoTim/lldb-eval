@@ -270,37 +270,37 @@ MATCHER_P(MatchesAst, expected,
   return false;
 }
 
-struct TestParam {
+struct PrecedenceTestParam {
   std::string str;
   std::shared_ptr<Expr> expr;
 
-  TestParam(std::string str, Expr expr)
+  PrecedenceTestParam(std::string str, Expr expr)
       : str(std::move(str)), expr(std::make_shared<Expr>(std::move(expr))) {}
-
-  friend std::ostream& operator<<(std::ostream& os, const TestParam& param) {
-    return os << "`" << param.str << "`";
-  }
 };
 
-class OperatorPrecedence : public TestWithParam<TestParam> {};
+std::ostream& operator<<(std::ostream& os, const PrecedenceTestParam& param) {
+  return os << "`" << param.str << "`";
+}
+
+class OperatorPrecedence : public TestWithParam<PrecedenceTestParam> {};
 
 TEST_P(OperatorPrecedence, CorrectAst) {
-  const auto& expected = GetParam();
+  const auto& param = GetParam();
 
   auto fake_rng = std::make_unique<FakeGeneratorRng>(
-      FakeGeneratorRng::from_expr(*expected.expr));
+      FakeGeneratorRng::from_expr(*param.expr));
 
   ExprGenerator gen(std::move(fake_rng));
   auto expr = gen.generate();
   std::ostringstream os;
   os << expr;
 
-  EXPECT_THAT(expr, MatchesAst(std::cref(*expected.expr)));
-  EXPECT_THAT(os.str(), StrEq(expected.str));
+  EXPECT_THAT(expr, MatchesAst(std::cref(*param.expr)));
+  EXPECT_THAT(os.str(), StrEq(param.str));
 }
 
-std::vector<TestParam> gen_params() {
-  std::vector<TestParam> params;
+std::vector<PrecedenceTestParam> gen_precedence_params() {
+  std::vector<PrecedenceTestParam> params;
   {
     // clang-format off
     Expr expected = BinaryExpr(
@@ -351,13 +351,83 @@ std::vector<TestParam> gen_params() {
   return params;
 }
 
-INSTANTIATE_TEST_SUITE_P(Fuzzer, OperatorPrecedence, ValuesIn(gen_params()));
+INSTANTIATE_TEST_SUITE_P(Fuzzer, OperatorPrecedence,
+                         ValuesIn(gen_precedence_params()));
 
-TEST(Fuzzer, TypePrinting) {
-  Type type(QualifiedType(PointerType(QualifiedType(
-      PointerType(QualifiedType(ScalarType::Char, CvQualifiers::Const))))));
+struct TypePrintTestParam {
+  std::string str;
+  std::shared_ptr<Type> type;
+
+  explicit TypePrintTestParam(std::string str, Type type)
+      : str(std::move(str)), type(std::make_shared<Type>(std::move(type))) {}
+};
+
+std::ostream& operator<<(std::ostream& os, const TypePrintTestParam& param) {
+  return os << param.str;
+}
+
+class TypePrinting : public TestWithParam<TypePrintTestParam> {};
+
+TEST_P(TypePrinting, CorrectStrType) {
+  const auto& param = GetParam();
 
   std::ostringstream os;
-  os << type;
-  EXPECT_THAT(os.str(), StrEq("const char**"));
+  os << *param.type;
+  EXPECT_THAT(os.str(), StrEq(param.str));
 }
+
+std::vector<TypePrintTestParam> gen_typing_params() {
+  std::vector<TypePrintTestParam> params;
+
+  {
+    Type type = QualifiedType(ScalarType::SignedInt);
+    std::string str = "int";
+
+    params.emplace_back(std::move(str), std::move(type));
+  }
+
+  {
+    Type type(QualifiedType(PointerType(QualifiedType(
+        PointerType(QualifiedType(ScalarType::Char, CvQualifiers::Const))))));
+    std::string str = "const char**";
+
+    params.emplace_back(std::move(str), std::move(type));
+  }
+
+  {
+    Type type(ReferenceType(QualifiedType(
+        PointerType(QualifiedType(ScalarType::SignedInt, CvQualifiers::Const)),
+        CvQualifiers::Volatile)));
+    std::string str = "const int* volatile&";
+
+    params.emplace_back(std::move(str), std::move(type));
+  }
+
+  {
+    Type type(QualifiedType(PointerType(
+        QualifiedType(TaggedType("TestStruct"), CvQualifiers::Const))));
+    std::string str = "const TestStruct*";
+
+    params.emplace_back(std::move(str), std::move(type));
+  }
+
+  {
+    Type type(QualifiedType(
+        PointerType(QualifiedType(ScalarType::Void, CvQualifiers::Const))));
+    std::string str = "const void*";
+
+    params.emplace_back(std::move(str), std::move(type));
+  }
+
+  {
+    Type type(QualifiedType(PointerType(QualifiedType(ScalarType::Void)),
+                            CvQualifiers::Const));
+    std::string str = "void* const";
+
+    params.emplace_back(std::move(str), std::move(type));
+  }
+
+  return params;
+}
+
+INSTANTIATE_TEST_SUITE_P(Fuzzer, TypePrinting, ValuesIn(gen_typing_params()));
