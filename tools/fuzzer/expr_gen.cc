@@ -208,7 +208,7 @@ bool DefaultGeneratorRng::gen_parenthesize(float probability) {
 }
 
 ExprKind DefaultGeneratorRng::gen_expr_kind(const Weights& weights) {
-  float sum = std::accumulate(weights.expr_begin(), weights.expr_end(), 0);
+  float sum = std::accumulate(weights.expr_begin(), weights.expr_end(), 0.0f);
 
   std::uniform_real_distribution<float> distr(0, sum);
   auto val = distr(rng_);
@@ -229,7 +229,7 @@ ExprKind DefaultGeneratorRng::gen_expr_kind(const Weights& weights) {
 }
 
 TypeKind DefaultGeneratorRng::gen_type_kind(const Weights& weights) {
-  float sum = std::accumulate(weights.type_begin(), weights.type_end(), 0);
+  float sum = std::accumulate(weights.type_begin(), weights.type_end(), 0.0f);
 
   std::uniform_real_distribution<float> distr(0, sum);
   auto val = distr(rng_);
